@@ -52,7 +52,7 @@ var jpeg_markers = map[byte]marker{
 	0xfe: marker{"COM"},
 }
 
-var testimage = "/home/anders/20111230_170947.jpg"
+var testimage = "/home/anders/IMG_0131.JPG"
 
 func main() {
 	file, err := os.Open(testimage)
@@ -65,7 +65,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%q\n", soi_marker)
 	if string(soi_marker) != SOI_MARKER {
 		log.Fatal("invalid image file. not a jpeg")
 	}
@@ -89,10 +88,8 @@ func main() {
 		//                 # Hit end of image marker, game-over!
 		//                 break
 		if mark == EOI {
-			fmt.Println("hit EOI marker. done!")
 			break
 		}
-		fmt.Println("got a good segment")
 		//             head2 = input.read(2)
 		//             size = unpack(">H", head2)[0]
 		err = binary.Read(file, binary.BigEndian, &head2)
@@ -101,13 +98,11 @@ func main() {
 		_, err = file.Read(data)
 		m, found := jpeg_markers[mark]
 		if !found {
-			fmt.Println("unknown marker")
 			continue
 		}
 		if m.Label == "APP1" {
-			fmt.Println("in EXIF segment, this is what we're looking for!")
 			parse_exif(data)
-		}
+		} 
 	}
 	// # Now go through and find all the blocks of data
 	//         segments = []
@@ -125,11 +120,8 @@ func main() {
 }
 
 func parse_exif(data []byte) {
-	fmt.Printf("parsing %d bytes of EXIF data\n", len(data))
 	exif := data[:6]
 	if string(exif) != "Exif\x00\x00" {
-		fmt.Println("bad exif marker")
-		fmt.Printf("%q\n", exif)
 		return
 	}
 	tiff_data := data[TIFF_OFFSET:]
@@ -137,13 +129,10 @@ func parse_exif(data []byte) {
 	var e binary.ByteOrder
 	e = binary.LittleEndian
 	if string(tiff_endian) == "II" {
-		fmt.Println("little endian")
 	} else {
 		if string(tiff_endian) == "MM" {
-			fmt.Println("big endian")
 			e = binary.BigEndian
 		} else {
-			fmt.Println("bad tiff endian header")
 			return
 		}
 	}
@@ -157,10 +146,7 @@ func parse_exif(data []byte) {
 	//                                    "<%x>" % (tiff_tag, TIFF_TAG))
 
 	if tiff_tag != TIFF_TAG {
-		fmt.Printf("%v\n", tiff_tag)
-		fmt.Println("bad tiff tag")
 	}
-	fmt.Printf("offset: %d\n", tiff_offset)
 	//     # Ok, the header parse out OK. Now we parse the IFDs contained in
 	//     # the APP1 header.
 
@@ -189,7 +175,6 @@ func parse_exif(data []byte) {
 		} else if count == 2 {
 			//         elif (count == 2):
 			//             ifd = IfdThumbnail(self.e, offset, self, self.mode, tiff_data)
-			fmt.Println("IfdThumbnail")
 		} else {
 			fmt.Println("invalid jpeg file")
 		}
@@ -303,18 +288,10 @@ var tags = map[uint32]tagdef{
 }
 
 func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
-	fmt.Println("IfdTIFF()")
 	// num_entries = unpack(e + 'H', data[offset:offset+2])[0]
 	var num_entries uint16
 	entries := make([]exifentry, 0)
 	binary.Read(bytes.NewBuffer(tiff_data[offset:offset+2]), e, &num_entries)
-	// next = unpack(e + "I", data[offset+2+12*num_entries:
-	//                             offset+2+12*num_entries+4])[0]
-	var next uint32
-	region_start := offset + 2 + (12 * uint32(num_entries))
-
-	binary.Read(bytes.NewBuffer(tiff_data[region_start:region_start+4]), e, &next)
-	fmt.Printf("OFFSET %d - %d\n", offset, next)
 	var embedded_tags = map[uint16]string{
 		0xA005:      "interoperability",
 		EXIF_OFFSET: "extendedEXIF",
@@ -324,7 +301,6 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 	for i := 0; i < int(num_entries); i++ {
 		//     start = (i * 12) + 2 + offset
 		start := (i * 12) + 2 + int(offset)
-		fmt.Printf("START: %d\n", start)
 		//     entry = unpack(e + "HHII", data[start:start+12])
 		//     tag, exif_type, components, the_data = entry
 		var tag, exif_type uint16
@@ -334,22 +310,19 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 		binary.Read(bytes.NewBuffer(tiff_data[start+2:start+4]), e, &exif_type)
 		binary.Read(bytes.NewBuffer(tiff_data[start+4:start+8]), e, &components)
 		binary.Read(bytes.NewBuffer(tiff_data[start+8:start+12]), e, &the_data)
-		fmt.Printf("%v %x %x %x\n", tag, exif_type, components, the_data)
 		//     byte_size = exif_type_size(exif_type) * components
 		byte_size := exif_type_size(exif_type) * components
-		fmt.Printf("byte_size: %d\n", byte_size)
 		if et, ok := embedded_tags[tag]; ok {
-			fmt.Printf("=== embedded tag matched: %s\n", et)
 			//         actual_data = self.embedded_tags[tag][1](e, the_data,
 			//                                                  exif_file, self.mode, data)
 			if et == "extendedEXIF" {
 				ifdtiff(e, the_data, tiff_data)
 			}
 		} else {
-			if t, ok := tags[uint32(tag)]; ok {
-				fmt.Printf("=== Tag is: %s\n", t.Label)
+			t, ok := tags[uint32(tag)]
+			if !ok {
+				fmt.Printf("UNKNOWN TAG\n")
 			}
-			fmt.Printf("exif_type: %s\n", exif_type_lookup[exif_type].Label)
 			if byte_size > 4 {
 				//             the_data = data[the_data:the_data+byte_size]
 				component_data = tiff_data[the_data : the_data+byte_size]
@@ -360,9 +333,9 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 			//         if exif_type == BYTE or exif_type == UNDEFINED:
 			//             actual_data = list(the_data)
 			if exif_type == BYTE {
-
+				fmt.Println("decoding BYTE data")
 			} else if exif_type == ASCII {
-				fmt.Printf("--- %s\n", string(component_data))
+				fmt.Printf("%s: %s\n", t.Label, string(component_data))
 				//             if the_data[-1] != '\0':
 				//                 actual_data = the_data + '\0'
 				if component_data[len(component_data)-1] != 0x00 {
@@ -371,11 +344,22 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 				}
 			} else if exif_type == SHORT {
 				//             actual_data = list(unpack(e + ("H" * components), the_data))
+				var sdata uint16
+				binary.Read(bytes.NewBuffer(component_data), e, &sdata)
+				fmt.Printf("%s: %d\n", t.Label, sdata)
+				
 			} else if exif_type == LONG {
+				var ldata uint32
 				//             actual_data = list(unpack(e + ("I" * components), the_data))
+				binary.Read(bytes.NewBuffer(component_data), e, &ldata)
+				fmt.Printf("%s: %d\n", t.Label, ldata)
+				
 			} else if exif_type == SLONG {
+				fmt.Println("decoding SLONG data")
 				//             actual_data = list(unpack(e + ("i" * components), the_data))
 			} else if exif_type == RATIONAL || exif_type == SRATIONAL {
+//				fmt.Println("decoding RATIONAL data")
+//				fmt.Println(t.Label)
 				//             if exif_type == RATIONAL: t = "II"
 				//             else: t = "ii"
 				//             actual_data = []
