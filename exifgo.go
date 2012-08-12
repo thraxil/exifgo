@@ -75,28 +75,16 @@ func parse_jpeg(file *os.File) {
 	head := make([]byte, 2)
 	var head2 uint16
 	for {
-		//             head = input.read(2)
-		//             delim, mark  =  unpack(">BB", head)
 		err = binary.Read(file, binary.BigEndian, head)
 		delim := head[0]
 		mark := head[1]
-		//             if (delim != DELIM):
-		//                 raise self.InvalidFile("Error, expecting delmiter. "\
-		//                                        "Got <%s> should be <%s>" %
-		//                                        (delim, DELIM))
 		if delim != DELIM {
 			break
 		}
-		//             if mark == EOI:
-		//                 # Hit end of image marker, game-over!
-		//                 break
 		if mark == EOI {
 			break
 		}
-		//             head2 = input.read(2)
-		//             size = unpack(">H", head2)[0]
 		err = binary.Read(file, binary.BigEndian, &head2)
-		//             data = input.read(size-2)
 		data := make([]byte, head2-2)
 		_, err = file.Read(data)
 		m, found := jpeg_markers[mark]
@@ -126,55 +114,32 @@ func parse_exif(data []byte) {
 			return
 		}
 	}
-	//     tiff_tag, tiff_offset = unpack(self.e + 'HI', tiff_data[2:8])
 	var tiff_tag uint16
 	var tiff_offset uint32
 	binary.Read(bytes.NewBuffer(tiff_data[2:4]), e, &tiff_tag)
 	binary.Read(bytes.NewBuffer(tiff_data[4:8]), e, &tiff_offset)
-	//     if (tiff_tag != TIFF_TAG):
-	//         raise JpegFile.InvalidFile("Bad TIFF tag. Got <%x>, expecting "\
-	//                                    "<%x>" % (tiff_tag, TIFF_TAG))
 
 	if tiff_tag != TIFF_TAG {
 	}
-	//     # Ok, the header parse out OK. Now we parse the IFDs contained in
-	//     # the APP1 header.
-
-	//     # We use this loop, even though we can really only expect and support
-	//     # two IFDs, the Attribute data and the Thumbnail data
-	//     offset = tiff_offset
-	//     count = 0
 	offset := tiff_offset
 	count := 0
 
 	var num_entries uint16
 	var start uint32
-	//     while offset:
 	for offset > 0 {
-		//         count += 1
 		count++
-		//         num_entries = unpack(self.e + 'H', tiff_data[offset:offset+2])[0]
 		binary.Read(bytes.NewBuffer(tiff_data[offset:offset+2]), e, &num_entries)
-		//         start = 2 + offset + (num_entries*12)
 		start = 2 + offset + (uint32(num_entries) * 12)
 
-		//         if (count == 1):
-		//             ifd = IfdTIFF(self.e, offset, self, self.mode, tiff_data)
 		if count == 1 {
 			ifdtiff(e, offset, tiff_data)
 		} else if count == 2 {
-			//         elif (count == 2):
-			//             ifd = IfdThumbnail(self.e, offset, self, self.mode, tiff_data)
+			// TODO: parse out Thumbnail
 		} else {
 			fmt.Println("invalid jpeg file")
 		}
-		//         self.ifds.append(ifd)
-
-		//         # Get next offset
-		//         offset = unpack(self.e + "I", tiff_data[start:start+4])[0]
 		binary.Read(bytes.NewBuffer(tiff_data[start:start+4]), e, &offset)
 	}
-
 }
 
 type tagdef struct {
@@ -278,7 +243,6 @@ var tags = map[uint32]tagdef{
 }
 
 func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
-	// num_entries = unpack(e + 'H', data[offset:offset+2])[0]
 	var num_entries uint16
 	entries := make([]exifentry, 0)
 	binary.Read(bytes.NewBuffer(tiff_data[offset:offset+2]), e, &num_entries)
@@ -287,12 +251,8 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 		EXIF_OFFSET: "extendedEXIF",
 		0x8825:      "GPS",
 	}
-	// for i in range(num_entries):
 	for i := 0; i < int(num_entries); i++ {
-		//     start = (i * 12) + 2 + offset
 		start := (i * 12) + 2 + int(offset)
-		//     entry = unpack(e + "HHII", data[start:start+12])
-		//     tag, exif_type, components, the_data = entry
 		var tag, exif_type uint16
 		var components, the_data uint32
 		var component_data []byte
@@ -300,11 +260,8 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 		binary.Read(bytes.NewBuffer(tiff_data[start+2:start+4]), e, &exif_type)
 		binary.Read(bytes.NewBuffer(tiff_data[start+4:start+8]), e, &components)
 		binary.Read(bytes.NewBuffer(tiff_data[start+8:start+12]), e, &the_data)
-		//     byte_size = exif_type_size(exif_type) * components
 		byte_size := exif_type_size(exif_type) * components
 		if et, ok := embedded_tags[tag]; ok {
-			//         actual_data = self.embedded_tags[tag][1](e, the_data,
-			//                                                  exif_file, self.mode, data)
 			if et == "extendedEXIF" {
 				ifdtiff(e, the_data, tiff_data)
 			}
@@ -314,39 +271,28 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 				t.Label = fmt.Sprintf("0x%x",uint32(tag))
 			}
 			if byte_size > 4 {
-				//             the_data = data[the_data:the_data+byte_size]
 				component_data = tiff_data[the_data : the_data+byte_size]
 			} else {
-				//             the_data = data[start+8:start+8+byte_size]
 				component_data = tiff_data[start+8 : start+8+int(byte_size)]
 			}
-			//         if exif_type == BYTE or exif_type == UNDEFINED:
-			//             actual_data = list(the_data)
 			if exif_type == BYTE {
 				fmt.Println("decoding BYTE data")
 			} else if exif_type == ASCII {
 				fmt.Printf("%s: %s\n", t.Label, string(component_data))
-				//             if the_data[-1] != '\0':
-				//                 actual_data = the_data + '\0'
 				if component_data[len(component_data)-1] != 0x00 {
 					fmt.Println("not null terminated")
 					component_data = append(component_data, 0x00)
 				}
 			} else if exif_type == SHORT {
-				//             actual_data = list(unpack(e + ("H" * components), the_data))
 				var sdata uint16
 				binary.Read(bytes.NewBuffer(component_data), e, &sdata)
 				fmt.Printf("%s: %d\n", t.Label, sdata)
-				
 			} else if exif_type == LONG {
 				var ldata uint32
-				//             actual_data = list(unpack(e + ("I" * components), the_data))
 				binary.Read(bytes.NewBuffer(component_data), e, &ldata)
 				fmt.Printf("%s: %d\n", t.Label, ldata)
-				
 			} else if exif_type == SLONG {
 				fmt.Println("decoding SLONG data")
-				//             actual_data = list(unpack(e + ("i" * components), the_data))
 			} else if exif_type == RATIONAL || exif_type == SRATIONAL {
 				if exif_type == RATIONAL {
 					var n,d uint32
@@ -359,23 +305,10 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 					binary.Read(bytes.NewBuffer(component_data[4:8]),e,&d)
 					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
 				}
-
-				//             if exif_type == RATIONAL: t = "II"
-				//             else: t = "ii"
-				//             actual_data = []
-				//             for i in range(components):
-				//                 actual_data.append(Rational(*unpack(e + t,
-				//                                                     the_data[i*8:
-				//                                                              i*8+8])))
 			} 
-			//         self.special_handler(tag, actual_data)				
 		}
-		//     entry = (tag, exif_type, actual_data)
-		//     self.entries.append(entry)
 		entries = append(entries, exifentry{tag, exif_type, component_data})
 	}
-	// need this for handling thumbnails:
-	// self.ifd_handler(data)
 }
 
 type exifentry struct {
