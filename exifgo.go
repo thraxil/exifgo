@@ -59,9 +59,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	parse_jpeg(file)
+}
 
+func parse_jpeg(file *os.File) {
 	soi_marker := make([]byte, len(SOI_MARKER))
-	_, err = file.Read(soi_marker)
+	_, err := file.Read(soi_marker)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -104,19 +107,6 @@ func main() {
 			parse_exif(data)
 		} 
 	}
-	// # Now go through and find all the blocks of data
-	//         segments = []
-	//         while 1:
-
-	//         self._segments = segments
-
-	//	data := make([]byte, 100)
-	//	count, err = file.Read(data)
-	//	if err != nil {
-	//		log.Fatal(err)
-	//	}
-	//	fmt.Printf("read %d bytes: %q\n", count, data[:count])
-
 }
 
 func parse_exif(data []byte) {
