@@ -82,7 +82,7 @@ func main() {
 		//                                        "Got <%s> should be <%s>" %
 		//                                        (delim, DELIM))
 		if delim != DELIM {
-			log.Fatal("bad delimiter")
+			break
 		}
 		//             if mark == EOI:
 		//                 # Hit end of image marker, game-over!
@@ -321,7 +321,7 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 		} else {
 			t, ok := tags[uint32(tag)]
 			if !ok {
-				fmt.Printf("UNKNOWN TAG\n")
+				t.Label = fmt.Sprintf("0x%x",uint32(tag))
 			}
 			if byte_size > 4 {
 				//             the_data = data[the_data:the_data+byte_size]
@@ -358,8 +358,18 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 				fmt.Println("decoding SLONG data")
 				//             actual_data = list(unpack(e + ("i" * components), the_data))
 			} else if exif_type == RATIONAL || exif_type == SRATIONAL {
-//				fmt.Println("decoding RATIONAL data")
-//				fmt.Println(t.Label)
+				if exif_type == RATIONAL {
+					var n,d uint32
+					binary.Read(bytes.NewBuffer(component_data[0:4]),e,&n)
+					binary.Read(bytes.NewBuffer(component_data[4:8]),e,&d)
+					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
+				} else {
+					var n,d int32
+					binary.Read(bytes.NewBuffer(component_data[0:4]),e,&n)
+					binary.Read(bytes.NewBuffer(component_data[4:8]),e,&d)
+					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
+				}
+
 				//             if exif_type == RATIONAL: t = "II"
 				//             else: t = "ii"
 				//             actual_data = []
@@ -367,9 +377,7 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 				//                 actual_data.append(Rational(*unpack(e + t,
 				//                                                     the_data[i*8:
 				//                                                              i*8+8])))
-			} else {
-				fmt.Println("unknown exif_type")
-			}
+			} 
 			//         self.special_handler(tag, actual_data)				
 		}
 		//     entry = (tag, exif_type, actual_data)
