@@ -61,7 +61,6 @@ func exif_type_size(t uint16) uint32 {
 	return exif_type_lookup[t].Size
 }
 
-
 var jpeg_markers = map[byte]marker{
 	0xc0: marker{"SOF0"},
 	0xc2: marker{"SOF2"},
@@ -129,7 +128,7 @@ func parse_jpeg(file *os.File) {
 		}
 		if m.Label == "APP1" {
 			parse_exif(data)
-		} 
+		}
 	}
 }
 
@@ -304,7 +303,7 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 		} else {
 			t, ok := tags[uint32(tag)]
 			if !ok {
-				t.Label = fmt.Sprintf("0x%x",uint32(tag))
+				t.Label = fmt.Sprintf("0x%x", uint32(tag))
 			}
 			if byte_size > 4 {
 				component_data = tiff_data[the_data : the_data+byte_size]
@@ -331,19 +330,18 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 				fmt.Println("decoding SLONG data")
 			} else if exif_type == RATIONAL || exif_type == SRATIONAL {
 				if exif_type == RATIONAL {
-					var n,d uint32
-					binary.Read(bytes.NewBuffer(component_data[0:4]),e,&n)
-					binary.Read(bytes.NewBuffer(component_data[4:8]),e,&d)
+					var n, d uint32
+					binary.Read(bytes.NewBuffer(component_data[0:4]), e, &n)
+					binary.Read(bytes.NewBuffer(component_data[4:8]), e, &d)
 					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
 				} else {
-					var n,d int32
-					binary.Read(bytes.NewBuffer(component_data[0:4]),e,&n)
-					binary.Read(bytes.NewBuffer(component_data[4:8]),e,&d)
+					var n, d int32
+					binary.Read(bytes.NewBuffer(component_data[0:4]), e, &n)
+					binary.Read(bytes.NewBuffer(component_data[4:8]), e, &d)
 					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
 				}
-			} 
+			}
 		}
 		entries = append(entries, exifentry{tag, exif_type, component_data})
 	}
 }
-
