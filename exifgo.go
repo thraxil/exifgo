@@ -1,8 +1,16 @@
 package main
 
+// this at least began as a fairly straightforward copy
+// of the read-only parts of Python "pexif" library:
+// http://code.google.com/p/pexif/
+//
+// it has evolved from there.
+//
+
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -94,17 +102,20 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	parse_jpeg(file)
-}
-
-func parse_jpeg(file *os.File) {
-	soi_marker := make([]byte, len(SOI_MARKER))
-	_, err := file.Read(soi_marker)
+	err = parse_jpeg(file)
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func parse_jpeg(file *os.File) error {
+	soi_marker := make([]byte, len(SOI_MARKER))
+	_, err := file.Read(soi_marker)
+	if err != nil {
+		return err
+	}
 	if string(soi_marker) != SOI_MARKER {
-		log.Fatal("invalid image file. not a jpeg")
+		return errors.New("invalid image file. not a jpeg")
 	}
 
 	head := make([]byte, 2)
@@ -114,10 +125,10 @@ func parse_jpeg(file *os.File) {
 		delim := head[0]
 		mark := head[1]
 		if delim != DELIM {
-			break
+			return nil
 		}
 		if mark == EOI {
-			break
+			return nil
 		}
 		err = binary.Read(file, binary.BigEndian, &head2)
 		data := make([]byte, head2-2)
@@ -127,15 +138,16 @@ func parse_jpeg(file *os.File) {
 			continue
 		}
 		if m.Label == "APP1" {
-			parse_exif(data)
+			return parse_exif(data)
 		}
 	}
+	return nil
 }
 
-func parse_exif(data []byte) {
+func parse_exif(data []byte) error {
 	exif := data[:6]
 	if string(exif) != "Exif\x00\x00" {
-		return
+		return errors.New("invalid Exif header")
 	}
 	tiff_data := data[TIFF_OFFSET:]
 	tiff_endian := tiff_data[:2]
@@ -146,7 +158,7 @@ func parse_exif(data []byte) {
 		if string(tiff_endian) == "MM" {
 			e = binary.BigEndian
 		} else {
-			return
+			return errors.New("invalid endianness")
 		}
 	}
 	var tiff_tag uint16
@@ -155,6 +167,7 @@ func parse_exif(data []byte) {
 	binary.Read(bytes.NewBuffer(tiff_data[4:8]), e, &tiff_offset)
 
 	if tiff_tag != TIFF_TAG {
+		return errors.New("invalid tiff tag")
 	}
 	offset := tiff_offset
 	count := 0
@@ -167,14 +180,15 @@ func parse_exif(data []byte) {
 		start = 2 + offset + (uint32(num_entries) * 12)
 
 		if count == 1 {
-			ifdtiff(e, offset, tiff_data)
+			return ifdtiff(e, offset, tiff_data)
 		} else if count == 2 {
 			// TODO: parse out Thumbnail
 		} else {
-			fmt.Println("invalid jpeg file")
+			return errors.New("invalid jpeg file")
 		}
 		binary.Read(bytes.NewBuffer(tiff_data[start:start+4]), e, &offset)
 	}
+	return nil
 }
 
 type tagdef struct {
@@ -277,7 +291,7 @@ var tags = map[uint32]tagdef{
 	0xa420: tagdef{"Unique image ID", "ImageUniqueID"},
 }
 
-func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
+func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) error {
 	var num_entries uint16
 	entries := make([]exifentry, 0)
 	binary.Read(bytes.NewBuffer(tiff_data[offset:offset+2]), e, &num_entries)
@@ -344,4 +358,5 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 		}
 		entries = append(entries, exifentry{tag, exif_type, component_data})
 	}
+	return nil
 }
