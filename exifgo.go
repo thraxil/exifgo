@@ -20,11 +20,47 @@ const (
 
 	TIFF_OFFSET = 6
 	TIFF_TAG    = 0x2a
+
+	BYTE      = 1
+	ASCII     = 2
+	SHORT     = 3
+	LONG      = 4
+	RATIONAL  = 5
+	UNDEFINED = 7
+	SLONG     = 9
+	SRATIONAL = 10
 )
 
 type marker struct {
 	Label string
 }
+
+type exifentry struct {
+	Tag        uint16
+	Type       uint16
+	ActualData []byte
+}
+
+type exiftype struct {
+	Label string
+	Size  uint32
+}
+
+var exif_type_lookup = map[uint16]exiftype{
+	BYTE:      exiftype{"byte", 1},
+	ASCII:     exiftype{"ascii", 1},
+	SHORT:     exiftype{"short", 2},
+	LONG:      exiftype{"long", 4},
+	RATIONAL:  exiftype{"rational", 8},
+	UNDEFINED: exiftype{"undefined", 1},
+	SLONG:     exiftype{"slong", 4},
+	SRATIONAL: exiftype{"srational", 8},
+}
+
+func exif_type_size(t uint16) uint32 {
+	return exif_type_lookup[t].Size
+}
+
 
 var jpeg_markers = map[byte]marker{
 	0xc0: marker{"SOF0"},
@@ -311,39 +347,3 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) {
 	}
 }
 
-type exifentry struct {
-	Tag        uint16
-	Type       uint16
-	ActualData []byte
-}
-
-type exiftype struct {
-	Label string
-	Size  uint32
-}
-
-const (
-	BYTE      = 1
-	ASCII     = 2
-	SHORT     = 3
-	LONG      = 4
-	RATIONAL  = 5
-	UNDEFINED = 7
-	SLONG     = 9
-	SRATIONAL = 10
-)
-
-var exif_type_lookup = map[uint16]exiftype{
-	BYTE:      exiftype{"byte", 1},
-	ASCII:     exiftype{"ascii", 1},
-	SHORT:     exiftype{"short", 2},
-	LONG:      exiftype{"long", 4},
-	RATIONAL:  exiftype{"rational", 8},
-	UNDEFINED: exiftype{"undefined", 1},
-	SLONG:     exiftype{"slong", 4},
-	SRATIONAL: exiftype{"srational", 8},
-}
-
-func exif_type_size(t uint16) uint32 {
-	return exif_type_lookup[t].Size
-}
