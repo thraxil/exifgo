@@ -94,14 +94,15 @@ var jpeg_markers = map[byte]marker{
 	0xfe: marker{"COM"},
 }
 
-func parse_jpeg(file *os.File) error {
+func parse_jpeg(file *os.File) ([]OutPutTag, error) {
+	output := make([]OutPutTag, 0)
 	soi_marker := make([]byte, len(SOI_MARKER))
 	_, err := file.Read(soi_marker)
 	if err != nil {
-		return err
+		return output, err
 	}
 	if string(soi_marker) != SOI_MARKER {
-		return errors.New("invalid image file. not a jpeg")
+		return output, errors.New("invalid image file. not a jpeg")
 	}
 
 	head := make([]byte, 2)
@@ -111,10 +112,10 @@ func parse_jpeg(file *os.File) error {
 		delim := head[0]
 		mark := head[1]
 		if delim != DELIM {
-			return nil
+			return output, nil
 		}
 		if mark == EOI {
-			return nil
+			return output, nil
 		}
 		err = binary.Read(file, binary.BigEndian, &head2)
 		data := make([]byte, head2-2)
@@ -127,13 +128,14 @@ func parse_jpeg(file *os.File) error {
 			return parse_exif(data)
 		}
 	}
-	return nil
+	return output, nil
 }
 
-func parse_exif(data []byte) error {
+func parse_exif(data []byte) ([]OutPutTag, error) {
 	exif := data[:6]
+	output := make([]OutPutTag, 0)
 	if string(exif) != "Exif\x00\x00" {
-		return errors.New("invalid Exif header")
+		return output, errors.New("invalid Exif header")
 	}
 	tiff_data := data[TIFF_OFFSET:]
 	tiff_endian := tiff_data[:2]
@@ -144,7 +146,7 @@ func parse_exif(data []byte) error {
 		if string(tiff_endian) == "MM" {
 			e = binary.BigEndian
 		} else {
-			return errors.New("invalid endianness")
+			return output, errors.New("invalid endianness")
 		}
 	}
 	var tiff_tag uint16
@@ -153,7 +155,7 @@ func parse_exif(data []byte) error {
 	binary.Read(bytes.NewBuffer(tiff_data[4:8]), e, &tiff_offset)
 
 	if tiff_tag != TIFF_TAG {
-		return errors.New("invalid tiff tag")
+		return output, errors.New("invalid tiff tag")
 	}
 	offset := tiff_offset
 	count := 0
@@ -170,11 +172,11 @@ func parse_exif(data []byte) error {
 		} else if count == 2 {
 			// TODO: parse out Thumbnail
 		} else {
-			return errors.New("invalid jpeg file")
+			return output, errors.New("invalid jpeg file")
 		}
 		binary.Read(bytes.NewBuffer(tiff_data[start:start+4]), e, &offset)
 	}
-	return nil
+	return output, nil
 }
 
 type tagdef struct {
@@ -277,9 +279,20 @@ var tags = map[uint32]tagdef{
 	0xa420: tagdef{"Unique image ID", "ImageUniqueID"},
 }
 
-func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) error {
+type OutPutTag struct {
+	Label   string
+	Tag     string
+	Content interface{}
+}
+
+type RationalData struct {
+	N interface{}
+	D interface{}
+}
+
+func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) ([]OutPutTag, error) {
 	var num_entries uint16
-	entries := make([]exifentry, 0)
+	outputtags := make([]OutPutTag, 0)
 	binary.Read(bytes.NewBuffer(tiff_data[offset:offset+2]), e, &num_entries)
 	var embedded_tags = map[uint16]string{
 		0xA005:      "interoperability",
@@ -298,7 +311,8 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) error {
 		byte_size := exif_type_size(exif_type) * components
 		if et, ok := embedded_tags[tag]; ok {
 			if et == "extendedEXIF" {
-				ifdtiff(e, the_data, tiff_data)
+				ts, _ := ifdtiff(e, the_data, tiff_data)
+				outputtags = append(outputtags, ts...)
 			}
 		} else {
 			t, ok := tags[uint32(tag)]
@@ -313,7 +327,7 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) error {
 			if exif_type == BYTE {
 				fmt.Println("decoding BYTE data")
 			} else if exif_type == ASCII {
-				fmt.Printf("%s: %s\n", t.Label, string(component_data))
+				outputtags = append(outputtags, OutPutTag{t.Label, t.Tag, string(component_data)})
 				if component_data[len(component_data)-1] != 0x00 {
 					fmt.Println("not null terminated")
 					component_data = append(component_data, 0x00)
@@ -321,11 +335,11 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) error {
 			} else if exif_type == SHORT {
 				var sdata uint16
 				binary.Read(bytes.NewBuffer(component_data), e, &sdata)
-				fmt.Printf("%s: %d\n", t.Label, sdata)
+				outputtags = append(outputtags, OutPutTag{t.Label, t.Tag, sdata})
 			} else if exif_type == LONG {
 				var ldata uint32
 				binary.Read(bytes.NewBuffer(component_data), e, &ldata)
-				fmt.Printf("%s: %d\n", t.Label, ldata)
+				outputtags = append(outputtags, OutPutTag{t.Label, t.Tag, ldata})
 			} else if exif_type == SLONG {
 				fmt.Println("decoding SLONG data")
 			} else if exif_type == RATIONAL || exif_type == SRATIONAL {
@@ -333,16 +347,15 @@ func ifdtiff(e binary.ByteOrder, offset uint32, tiff_data []byte) error {
 					var n, d uint32
 					binary.Read(bytes.NewBuffer(component_data[0:4]), e, &n)
 					binary.Read(bytes.NewBuffer(component_data[4:8]), e, &d)
-					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
+					outputtags = append(outputtags, OutPutTag{t.Label, t.Tag, RationalData{n, d}})
 				} else {
 					var n, d int32
 					binary.Read(bytes.NewBuffer(component_data[0:4]), e, &n)
 					binary.Read(bytes.NewBuffer(component_data[4:8]), e, &d)
-					fmt.Printf("%s: %d / %d\n", t.Label, n, d)
+					outputtags = append(outputtags, OutPutTag{t.Label, t.Tag, RationalData{n, d}})
 				}
 			}
 		}
-		entries = append(entries, exifentry{tag, exif_type, component_data})
 	}
-	return nil
+	return outputtags, nil
 }
