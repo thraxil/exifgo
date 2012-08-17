@@ -10,21 +10,29 @@ import (
 
 var testimage = "test_images/pug.jpg"
 
-/* 
-Camera Make: PENTAX Corporation 
-Camera Model: PENTAX Optio S 
+type string_testcase struct {
+	Label string
+	Value string
+}
+
+var stringtestcases = []string_testcase{
+	string_testcase{"Camera Make", "PENTAX Corporation "},
+	string_testcase{"Camera Model", "PENTAX Optio S "},
+	string_testcase{"Camera Software", "Optio S V1.00    "},
+	string_testcase{"File change data and time", "2006:12:23 13:16:26"},
+	string_testcase{"Date of original data generation", "2006:12:23 13:16:26"},
+	string_testcase{"Date of digital data generation", "2006:12:23 13:16:26"},
+}
+
+/*
 Orientation of image: 1
 X Resolution: 72 / 1
 Y Resolution: 72 / 1
 Unit of X and Y resolution: 2
-Camera Software: Optio S V1.00    
-File change data and time: 2006:12:23 13:16:26
 Y and C positioning: 1
 Exposure Time: 1 / 8
 F Number: 26 / 10
 Exposure Program: 2
-Date of original data generation: 2006:12:23 13:16:26
-Date of digital data generation: 2006:12:23 13:16:26
 Image compression mode: 2048000 / 3145728
 Exposure bias: 0 / 3
 Maximum lens apeture: 28 / 10
@@ -60,18 +68,21 @@ func Test_Pug(t *testing.T) {
 	if len(found_tags) == 0 {
 		t.Error("no tags found")
 	}
-	found := false
-	for _, f := range found_tags {
-		if f.Label == "Camera Model" {
-			found = true
-			if f.Content.(string) != "PENTAX Optio S \x00" {
-				t.Error("Not the expected value")
-				t.Error(f.Content.(string))
-				t.Error(hex.EncodeToString([]byte(f.Content.(string))))
+	for _, stc := range stringtestcases {
+		found := false
+		for _, f := range found_tags {
+			if f.Label == stc.Label {
+				found = true
+				if f.Content.(string) != stc.Value+"\x00" {
+					t.Error("Not the expected value")
+					t.Error(f.Content.(string))
+					t.Error(hex.EncodeToString([]byte(f.Content.(string))))
+					t.Error(hex.EncodeToString([]byte(stc.Value + "\x00")))
+				}
 			}
 		}
-	}
-	if !found {
-		t.Error("not camera model tag found")
+		if !found {
+			t.Error("tag not found")
+		}
 	}
 }
