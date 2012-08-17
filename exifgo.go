@@ -1,4 +1,4 @@
-package main
+package exifgo
 
 // this at least began as a fairly straightforward copy
 // of the read-only parts of Python "pexif" library:
@@ -12,7 +12,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -93,19 +92,6 @@ var jpeg_markers = map[byte]marker{
 	0xee: marker{"APP14"},
 	0xef: marker{"APP15"},
 	0xfe: marker{"COM"},
-}
-
-var testimage = "test_images/pug.jpg"
-
-func main() {
-	file, err := os.Open(testimage)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = parse_jpeg(file)
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func parse_jpeg(file *os.File) error {
