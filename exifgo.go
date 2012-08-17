@@ -95,7 +95,7 @@ var jpeg_markers = map[byte]marker{
 	0xfe: marker{"COM"},
 }
 
-var testimage = "/home/anders/IMG_0131.JPG"
+var testimage = "test_images/pug.jpg"
 
 func main() {
 	file, err := os.Open(testimage)
