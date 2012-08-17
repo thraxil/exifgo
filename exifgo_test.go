@@ -3,11 +3,12 @@ package exifgo
 import (
 	"log"
 	"os"
+	"testing"
 )
 
 var testimage = "test_images/pug.jpg"
 
-func main() {
+func Test_Pug(t *testing.T) {
 	file, err := os.Open(testimage)
 	if err != nil {
 		log.Fatal(err)
