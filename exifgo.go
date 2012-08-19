@@ -94,7 +94,7 @@ var jpeg_markers = map[byte]marker{
 	0xfe: marker{"COM"},
 }
 
-func parse_jpeg(file *os.File) ([]OutPutTag, error) {
+func Parse_jpeg(file *os.File) ([]OutPutTag, error) {
 	output := make([]OutPutTag, 0)
 	soi_marker := make([]byte, len(SOI_MARKER))
 	_, err := file.Read(soi_marker)

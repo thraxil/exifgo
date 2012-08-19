@@ -61,7 +61,7 @@ func Test_Pug(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	found_tags, err := parse_jpeg(file)
+	found_tags, err := Parse_jpeg(file)
 	if err != nil {
 		log.Fatal(err)
 	}
